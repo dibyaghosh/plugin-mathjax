@@ -112,6 +112,49 @@ function processBlock(blk) {
     };
 }
 
+
+function processInline(blk) {
+    var book = this;
+    var tex = blk.body;
+    var isInline = true;
+
+    // For website return as script
+    var config = book.config.get('pluginsConfig.mathjax', {});
+
+    if ((book.output.name == "website" || book.output.name == "json")
+        && !config.forceSVG) {
+        return '<script type="math/tex; '+(isInline? "": "mode=display")+'">'+blk.body+'</script>';
+    }
+
+    // Check if not already cached
+    var hashTex = crc.crc32(tex).toString(16);
+
+    // Return
+    var imgFilename = '_mathjax_' + hashTex + '.svg';
+    var img = '<img src="/' + imgFilename + '" />';
+
+    // Center math block
+    if (!isInline) {
+        img = '<div style="text-align:center;margin: 1em 0em;width: 100%;">' + img + '</div>';
+    }
+
+    return {
+        body: img,
+        post: function() {
+            if (cache[hashTex]) {
+                return;
+            }
+
+            cache[hashTex] = true;
+            countMath = countMath + 1;
+
+            return convertTexToSvg(tex, { inline: isInline })
+            .then(function(svg) {
+                return book.output.writeFile(imgFilename, svg);
+            });
+        }
+    };
+}
 /**
     Return assets for website
 
@@ -139,6 +182,14 @@ module.exports = {
                 end: "$$"
             },
             process: processBlock
+        },
+        inline: {
+            shortcuts: {
+                parsers: ["markdown", "asciidoc"],
+                start: "$",
+                end: "$"
+            },
+            process: processInline
         }
     }
 };
